@@ -1,8 +1,8 @@
-#include <stdio.h>
+﻿#include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
-#include <unistd.h>
-//#include <windows.h>
+//#include <unistd.h>
+#include <windows.h>
 
 long long int meso_used_total = 0, meso_used, meso_used_max = 0, meso_used_min = -1;
 unsigned long long int rein_total = 0, destroy_total = 0, rein_count, fail_total = 0, destroy_count, success_total = 0;
@@ -14,7 +14,8 @@ float pot_table[] = {95,90,85,85,80,75,70,65,60,55,50,45,40,35,30,30,30,30,30,30
 float destroy_table[] = {0,0,0,0,0,0,0,0,0,0,0,0,0.6,1.3,1.4,2.1,2.1,2.1,2.8,2.8,7.0,7.0, 19.4, 29.4, 39.6};
 int objective_level, num_repeat, repeat_speed, star_catch;
 int rand_var;
-char record_1 = 0, record_2 = 0;
+char record_1 = 0, record_2 = 0, eventc;
+char* event;
 
 void init(int argc) {
 	destroy_count = 0;
@@ -48,6 +49,7 @@ int setOptions(int argc, char *argv[]) {
 	num_repeat = 1;
 	repeat_speed = 3;
 	rein_start = 0;
+	eventc = 0;
 	
 	if(argc == 1)
 		printf("이 시뮬레이터는 실행시 옵션을 통해 초기 강화 수치, 도달하고자 하는 강화 수치,\n \
@@ -81,6 +83,12 @@ int setOptions(int argc, char *argv[]) {
 				
 			rein_start = atoi(argv[i]);
 		}
+		else if(strcmp(argv[i], "--event") == 0) {
+			event = argv[++i];
+			eventc = strcmp(event, "1+1") ? 
+					 strcmp(event, "30%") ? 
+					 strcmp(event, "100%") ? -1 : 3 : 2 : 1;
+		}
 		else if(strcmp(argv[i], "--help") == 0) {
 			printf("--start 시작레벨 --objective 목표레벨 --repeat 반복회수 --speed 속도 \n \
 					\r시작레벨은 0~24, 목표레벨은 1~25, 반복회수는 1 이상, 속도는 1~30으로 설정해주세요.\n\
@@ -92,7 +100,7 @@ int setOptions(int argc, char *argv[]) {
 			return 0;
 	}		
 	if(repeat_speed < 1 || num_repeat < 1 || objective_level < 1 || objective_level > 25 \
-		|| rein_level < 0 || objective_level < 1 || rein_level > 24) {
+		|| rein_level < 0 || objective_level < 1 || rein_level > 24 || eventc == -1) {
 		printf("옵션의 범위를 맞춰주세요.\n");
 		return 0;
 	}
@@ -103,8 +111,8 @@ int main(int argc, char *argv[]) {
 	if(!setOptions(argc, argv))
 		return 0;
 
-	usleep(1000000);	
-//	Sleep(1000);	
+//	usleep(1000000);	
+	Sleep(1000);	
 	
 	srand(time(NULL));
 	int logging = repeat_speed < 31;
@@ -112,17 +120,22 @@ int main(int argc, char *argv[]) {
 		init(argc);	
 		while(rein_level < objective_level) {
 			rein_count++;
-			meso_used += meso_table[rein_level];
-
+			meso_used += eventc == 2 ? (int)((float)meso_table[rein_level] * 0.7f) : meso_table[rein_level];
+			
 			rand_var = (rand() % 1000) + 1;
 			if(record_1 && record_2) {
 				if(logging) printf("chance time!\t");
 				rand_var = -1;
 			}
+			else if(eventc == 3 && (rein_level == 5 || rein_level == 10 || rein_level == 15))
+				rand_var = -1;
+				
 
 			if(pot_table[rein_level] * 10 >= rand_var) {
 				success_total++;
 				rein_level++;
+				if(eventc == 1 && rein_level < 12)
+					rein_level++;
 				record_2 = 0;
 				record_1 = 0;
 				if(logging) printf("success!\t\t\t\t\t\t\t\t\n");
@@ -147,13 +160,13 @@ int main(int argc, char *argv[]) {
 				printf("현재 강화 레벨: %d\t", rein_level);
 				printf("소모 메소: %lld\t", meso_used);
 				printf("파괴 회수: %lld\r", destroy_count);
-				usleep(5000000/repeat_speed);
-//				Sleep(5000/repeat_speed);
+//				usleep(5000000/repeat_speed);
+				Sleep(5000/repeat_speed);
 			}
 		}
 	update();		
 	}
-	printf("누적 소모 메소 : %lld, 평균: %f\n", meso_used_total, meso_used_total / (float)num_repeat);
+	printf("누적 소모 메소 : %lld, 평균: %f\t\t\t\t\n", meso_used_total, meso_used_total / (float)num_repeat);
 	printf("강화 시도 회수: %lld, 평균: %f\n", rein_total, rein_total / (float)num_repeat);
 	printf("강화 성공 회수: %lld, 평균: %f\n", success_total, success_total / (float)num_repeat);
 	printf("강화 실패 회수: %lld, 평균: %f\n", fail_total, fail_total / (float)num_repeat);
