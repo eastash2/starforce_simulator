@@ -3,17 +3,27 @@
 #include <stdlib.h>
 #include <time.h>
 #include <process.h>  
+#include <math.h>
 
 
+int meso_table[25] = {0};
+int pot_table[] = {950,900,850,850,800,750,700,650,600,550,500,450,400,350,300,300,300,300,300,300,300,300,30,20,10};
+int destroy_table[] = {0,0,0,0,0,0,0,0,0,0,0,0,6,13,14,21,21,21,28,28,70,70, 194, 294, 396};
 
-unsigned int meso_table[] = {164800,328700,492500,656400,820200,984000,1147900,\
-1311700,1475600,1639400,6639400,8397300,10422900,12731500,15338200,36514500,\
-43008300,50185100,58072700,66698700,76090000,86273300,97274600,109120000,121834900};
-int pot_table[] = {95,90,85,85,80,75,70,65,60,55,50,45,40,35,30,30,30,30,30,30,30,30,3,2,1};
-float destroy_table[] = {0,0,0,0,0,0,0,0,0,0,0,0,0.6,1.3,1.4,2.1,2.1,2.1,2.8,2.8,7.0,7.0, 19.4, 29.4, 39.6};
-int objective_level, repeat_speed, star_catch,\
-	eventc, stop_on_destroy, rein_start, thread_num;
-long long int num_repeat, procedure = 0;
+int objective_level, 
+	repeat_speed, 
+	star_catch,
+	eventc, 
+	stop_on_destroy, 
+	rein_start, 
+	thread_num, 
+	prevent_destroy,
+	equipment_level,
+	recovery_cost;
+	
+long long int 
+	num_repeat, 
+	procedure = 0;
 
 struct globalStats 
 {
@@ -92,62 +102,63 @@ struct globalStats* simulate(int id)
 	int logging = repeat_speed < 31;	
 	struct globalStats* g = (struct globalStats*) malloc(sizeof(struct globalStats));
 	struct localStats* l = (struct localStats*) malloc(sizeof(struct localStats));
+	
 	initG(g);
-	initL(l);
 	srand(time(NULL) + id * id);
+	
 	for(int i = 0; i < num_repeat/thread_num; i++) 
 	{
 		initL(l);	
 		while(l->rein_level < objective_level) 
 		{
 			l->rein_count++;
-			l->meso_used += eventc == 2 ? (int)((float)meso_table[l->rein_level] * 0.7f) : meso_table[l->rein_level];
+			l->meso_used += meso_table[l->rein_level];
+			if(logging)
+				printf("+%d 메소\t\t", meso_table[l->rein_level]);
 			
-			rand_var = (rand() % 1000) + 1;
-			
+			rand_var = (rand() % 1000);			
 			if(record & 1 && record & 2) 
 			{
 				if(logging) 
-					printf("chance time!\t");
+					printf("chance time success!");				
 				rand_var = -1;
 			}
-			else if(eventc == 3 && (l->rein_level == 5 || l->rein_level == 10 || l->rein_level == 15))
-				rand_var = -1;
 			
 			record = record << 1;
-
-			if(pot_table[l->rein_level] * 10 >= rand_var) 
+			if(rand_var < pot_table[l->rein_level]) 
 			{
+				if(logging && rand_var != -1) 
+					printf("success!");
 				g->success_total++;
 				l->rein_level++;
 				if(eventc == 1 && l->rein_level < 12)
 					l->rein_level++;
-				if(logging) 
-					printf("success!\t\t\t\t\t\t\t\t\n");
 			} 
-			else if((destroy_table[l->rein_level] + pot_table[l->rein_level]) * 10 >= rand_var) {
+			else if(rand_var < pot_table[l->rein_level] + destroy_table[l->rein_level]) 
+			{
 				if(logging) 
-					printf("destroyed.. at level %d\t\t\t\t\t\t\t\t\n", l->rein_level);
+					printf("destroyed.. at level %d", l->rein_level);
 				g->fail_total++;
 				l->destroy_count++;
-				l->rein_level = 12;			
+				l->rein_level = 12;					
 				if(stop_on_destroy) break;
+				else l->meso_used += recovery_cost;
 			} 
 			else 
 			{
+				if(logging) 
+					printf("failed..");
 				g->fail_total++;
-
 				if(l->rein_level > 10 && l->rein_level != 15 && l->rein_level != 20) {
 					l->rein_level--;
 					record++;	
-				}
-				if(logging) 
-					printf("failed..\t\t\t\t\t\t\t\t\n");
+				}				
 			}
 			if(logging) 
 			{
-				printf("현재 강화 레벨: %d\t", l->rein_level);
+				printf("\t\t\t\t\t\t\n");
 				printf("소모 메소: %lld\t", l->meso_used);
+				printf("현재 강화 레벨: %d\t", l->rein_level);	
 				printf("파괴 회수: %lld\r", l->destroy_count);
 				Sleep(5000/repeat_speed);
 			}
@@ -159,7 +170,7 @@ struct globalStats* simulate(int id)
 	return g;
 }
 
-int setOptions(int argc, char *argv[]) 
+int getOptions(int argc, char *argv[]) 
 {
 	char* opt;
 	objective_level = 17;
@@ -169,6 +180,9 @@ int setOptions(int argc, char *argv[])
 	eventc = 0;
 	stop_on_destroy = 0;
 	thread_num = -1;
+	prevent_destroy = 26;
+	equipment_level = 160;
+	recovery_cost = 100000000;
 	
 	if(argc == 1)
 		printf("이 시뮬레이터는 실행시 옵션을 통해 초기 강화 수치, 도달하고자 하는 강화 수치,\n \
@@ -216,9 +230,27 @@ int setOptions(int argc, char *argv[])
 		}
 		else if(!strcmp(argv[i], "--thread")) 
 		{
-			if(strcmp(argv[++i],"0") && atoi(argv[i]) < 1)
+			if(atoi(argv[i]) < 1)
 				return 0;				
 			thread_num = atoi(argv[i]);
+		}
+		else if(!strcmp(argv[i], "--prevent-destroy")) 
+		{
+			if(atoi(argv[++i]) < 1)
+				return 0;				
+			prevent_destroy = atoi(argv[i]);
+		}
+		else if(!strcmp(argv[i], "--level")) 
+		{
+			if(atoi(argv[++i]) < 1)
+				return 0;				
+			equipment_level = atoi(argv[i]);
+		}
+		else if(!strcmp(argv[i], "--recovery-cost")) 
+		{
+			if(strcmp(argv[++i],"0") && atoi(argv[i]) < 1)
+				return 0;			
+			recovery_cost = atoi(argv[i]);
 		}
 		else if(!strcmp(argv[i], "--help")) 
 		{
@@ -260,7 +292,7 @@ int setOptions(int argc, char *argv[])
 	}
 
 	thread_num = thread_num == -1 ? 1 : thread_num;
-	repeat_speed = repeat_speed == -1 ? 1 : repeat_speed;
+	repeat_speed = repeat_speed == -1 ? 5 : repeat_speed;
 	if(repeat_speed < 1 || num_repeat < 1 || objective_level < 1 || objective_level > 25 \
 		|| rein_start < 0 || objective_level < 1 || rein_start > 24 || eventc == -1 || \
 		stop_on_destroy == -1 || thread_num < 1 || num_repeat%thread_num != 0 || thread_num > 20) 
@@ -269,6 +301,30 @@ int setOptions(int argc, char *argv[])
 		return 0;
 	}
 	return 1;
+}
+
+void setTables() 
+{
+	unsigned int meso_table_origin[25];
+	for(int i = 0; i < 25; i++)
+	{
+		meso_table_origin[i] = 1000 + ((i < 10 ? ((double)(i + 1) / 25) : ((pow(i + 1, 2.7) / (i < 15 ? 400 : 200)))) * pow(equipment_level, 3));
+		meso_table_origin[i] = round((double)meso_table_origin[i]/100) * 100;
+		meso_table[i] = round((double)meso_table_origin[i] * ((eventc == 2) ? 0.07 : 0.1)) * 10;
+	}
+	
+	for(int i = prevent_destroy; i < 17; i++)
+	{
+		meso_table[i] += meso_table_origin[i];
+		destroy_table[i] = 0;
+	}
+	
+	if(eventc == 3)
+	{
+		pot_table[5] = 1000;
+		pot_table[10] = 1000;
+		pot_table[15] = 1000;
+	}
 }
 
 void integrateGlobalStats(struct globalStats* tg, struct globalStats* g) 
@@ -290,7 +346,19 @@ void integrateGlobalStats(struct globalStats* tg, struct globalStats* g)
 
 	g->fail_total += tg->fail_total;
 	g->success_total += tg->success_total;
+}
 
+void printFinalStats(struct globalStats* g) 
+{
+	printf("누적 소모 메소 : %lld, 평균: %f\t\t\t\t\n", g->meso_used_total, g->meso_used_total / (double)num_repeat);
+	printf("강화 시도 회수: %lld, 평균: %f\n", g->rein_total, g->rein_total / (double)num_repeat);
+	printf("강화 성공 회수: %lld, 평균: %f\n", g->success_total, g->success_total / (double)num_repeat);
+	printf("강화 실패 회수: %lld, 평균: %f\n", g->fail_total, g->fail_total / (double)num_repeat);
+	printf("강화 실패 및 장비 파괴 회수: %lld, 평균: %f\n", g->destroy_total, g->destroy_total / (double)num_repeat);	
+	
+	printf("최소/최대 소모 메소: %lld/%lld\n", g->meso_used_min, g->meso_used_max);
+	printf("최소/최대 강화 회수: %lld/%lld\n", g->rein_min, g->rein_max);
+	printf("최소/최대 파괴 회수: %lld/%lld\n", g->destroy_min, g->destroy_max);
 }
 
 int main(int argc, char *argv[]) 
@@ -300,9 +368,12 @@ int main(int argc, char *argv[])
 	struct globalStats* result;
 	int iter;
 	time_t begin = time(NULL), end;
-	if(!setOptions(argc, argv))
+	
+	if(!getOptions(argc, argv))
 		return 0;
-
+	
+	setTables();
+	
 	for(int i = 0; i < thread_num; i++)
 		threads[i] = (HANDLE)_beginthreadex(NULL, 0, (LPVOID)simulate, (PVOID)i, 0, NULL);		
 	
@@ -323,20 +394,9 @@ int main(int argc, char *argv[])
 		GetExitCodeThread(threads[i],(unsigned *)&result);
 		integrateGlobalStats(result, g);
 		CloseHandle(threads[i]);
-		free(result);
 	}
-
 	Sleep(500);
-	printf("누적 소모 메소 : %lld, 평균: %f\t\t\t\t\n", g->meso_used_total, g->meso_used_total / (double)num_repeat);
-	printf("강화 시도 회수: %lld, 평균: %f\n", g->rein_total, g->rein_total / (double)num_repeat);
-	printf("강화 성공 회수: %lld, 평균: %f\n", g->success_total, g->success_total / (double)num_repeat);
-	printf("강화 실패 회수: %lld, 평균: %f\n", g->fail_total, g->fail_total / (double)num_repeat);
-	printf("강화 실패 및 장비 파괴 회수: %lld, 평균: %f\n", g->destroy_total, g->destroy_total / (double)num_repeat);	
-	
-	printf("최소/최대 소모 메소: %lld/%lld\n", g->meso_used_min, g->meso_used_max);
-	printf("최소/최대 강화 회수: %lld/%lld\n", g->rein_min, g->rein_max);
-	printf("최소/최대 파괴 회수: %lld/%lld\n", g->destroy_min, g->destroy_max);
-	
+	printFinalStats(g);	
 	end = time(NULL);
 	printf("경과 시간: %lldsec\n", end - begin);
 	return 0;
