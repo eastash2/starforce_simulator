@@ -182,7 +182,7 @@ int getOptions(int argc, char *argv[])
 	thread_num = -1;
 	prevent_destroy = 26;
 	equipment_level = 160;
-	recovery_cost = 100000000;
+	recovery_cost = 0;
 	
 	if(argc == 1)
 		printf("이 시뮬레이터는 실행시 옵션을 통해 초기 강화 수치, 도달하고자 하는 강화 수치,\n \
@@ -230,7 +230,7 @@ int getOptions(int argc, char *argv[])
 		}
 		else if(!strcmp(argv[i], "--thread")) 
 		{
-			if(atoi(argv[i]) < 1)
+			if(atoi(argv[++i]) < 1)
 				return 0;				
 			thread_num = atoi(argv[i]);
 		}
